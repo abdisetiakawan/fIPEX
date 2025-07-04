@@ -10,6 +10,16 @@
             </button>
             <h1 class="text-xl font-bold text-gray-900">Digital Exhibition</h1>
           </div>
+          <nav class="flex space-x-8">
+            <div v-if="authStore.isAuthenticated()" class="flex items-center space-x-4">
+              <span class="text-sm text-gray-600">Halo, {{ authStore.user?.name }}</span>
+              <button @click="logout" class="text-gray-500 hover:text-gray-700">Logout</button>
+            </div>
+            <div v-else class="flex space-x-4">
+              <router-link to="/login" class="text-gray-500 hover:text-gray-700">Login</router-link>
+              <router-link to="/register" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700">Daftar</router-link>
+            </div>
+          </nav>
         </div>
       </div>
     </header>
@@ -32,6 +42,7 @@
               <div class="text-3xl font-bold text-blue-600">{{ work.votes }}</div>
               <div class="text-sm text-gray-500">Total Votes</div>
               <button 
+                v-if="authStore.isAuthenticated()"
                 @click="vote"
                 :disabled="work.hasVoted"
                 :class="work.hasVoted ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'"
@@ -39,12 +50,21 @@
               >
                 {{ work.hasVoted ? 'Voted' : 'Vote Karya Ini' }}
               </button>
+              <div v-else class="mt-2">
+                <router-link 
+                  to="/login"
+                  class="block px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                >
+                  Login untuk Vote
+                </router-link>
+              </div>
             </div>
           </div>
           
           <!-- Actions -->
           <div class="flex space-x-4 mb-6">
             <button 
+              v-if="authStore.isAuthenticated()"
               @click="toggleFavorite"
               :class="work.isFavorite ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-600 hover:bg-gray-700'"
               class="flex items-center px-4 py-2 text-white text-sm rounded"
@@ -86,7 +106,7 @@
           <h3 class="text-lg font-semibold mb-4">Komentar ({{ comments.length }})</h3>
           
           <!-- Comment Form -->
-          <div class="mb-6">
+          <div v-if="authStore.isAuthenticated()" class="mb-6">
             <textarea 
               v-model="newComment"
               placeholder="Tulis komentar..."
@@ -100,6 +120,14 @@
             >
               Kirim
             </button>
+          </div>
+          
+          <!-- Login prompt for comments -->
+          <div v-else class="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+            <p class="text-gray-600 text-center">
+              <router-link to="/login" class="text-blue-600 hover:underline">Login</router-link> 
+              untuk dapat memberikan komentar
+            </p>
           </div>
           
           <!-- Comments List -->
@@ -123,9 +151,12 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from '../../stores/auth'
 
 const route = useRoute()
+const router = useRouter()
+const authStore = useAuthStore()
 const workId = route.params.id
 
 const work = ref(null)
@@ -152,26 +183,40 @@ const comments = ref([
 ])
 
 const vote = async () => {
+  if (!authStore.isAuthenticated()) {
+    router.push('/login')
+    return
+  }
+
   try {
-    const response = await fetch(`http://localhost:3000/api/public/vote/${workId}`, {
+    const response = await fetch(`http://localhost:3000/api/public/works/${workId}/vote`, {
       credentials: "include",
       method: 'POST'
-      
     })
     
     if (response.ok) {
       work.value.votes++
       work.value.hasVoted = true
+    } else {
+      const error = await response.json()
+      alert(error.message || 'Gagal memberikan vote')
     }
   } catch (error) {
     console.error('Error voting:', error)
+    alert('Terjadi kesalahan saat memberikan vote')
   }
 }
 
 const toggleFavorite = async () => {
+  if (!authStore.isAuthenticated()) {
+    router.push('/login')
+    return
+  }
+
   try {
-    const response = await fetch(`http://localhost:3000/api/public/favorite/${workId}`, {
-      method: 'POST'
+    const response = await fetch(`http://localhost:3000/api/public/works/${workId}/favorite`, {
+      method: 'POST',
+      credentials: 'include'
     })
     
     if (response.ok) {
@@ -185,9 +230,15 @@ const toggleFavorite = async () => {
 const submitComment = async () => {
   if (!newComment.value.trim()) return
   
+  if (!authStore.isAuthenticated()) {
+    router.push('/login')
+    return
+  }
+  
   try {
-    const response = await fetch(`http://localhost:3000/api/public/comment/${workId}`, {
+    const response = await fetch(`http://localhost:3000/api/public/works/${workId}/comments`, {
       method: 'POST',
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json'
       },
@@ -200,7 +251,7 @@ const submitComment = async () => {
       const comment = await response.json()
       comments.value.unshift({
         id: Date.now(),
-        author: 'Anonymous',
+        author: authStore.user?.name || 'Anonymous',
         content: newComment.value,
         timeAgo: 'Baru saja'
       })
@@ -209,6 +260,11 @@ const submitComment = async () => {
   } catch (error) {
     console.error('Error submitting comment:', error)
   }
+}
+
+const logout = () => {
+  authStore.logout()
+  router.push('/pengunjung')
 }
 
 onMounted(async () => {

@@ -67,6 +67,19 @@ const registerValidation = [
     .isInt({ min: 2000, max: new Date().getFullYear() + 5 })
     .withMessage("Please provide a valid angkatan year"),
 
+  // Conditional validation for pengunjung
+  body("phone")
+    .if(body("role").equals("pengunjung"))
+    .optional()
+    .isMobilePhone("id-ID")
+    .withMessage("Please provide a valid Indonesian phone number"),
+
+  body("institution")
+    .if(body("role").equals("pengunjung"))
+    .optional()
+    .isLength({ min: 2, max: 100 })
+    .withMessage("Institution must be between 2 and 100 characters"),
+
   body("termsAccepted")
     .equals("true")
     .withMessage("You must accept the terms and conditions"),
@@ -128,6 +141,11 @@ const updateProfileValidation = [
     .optional()
     .isURL()
     .withMessage("Please provide a valid Behance URL"),
+
+  body("institution")
+    .optional()
+    .isLength({ min: 2, max: 100 })
+    .withMessage("Institution must be between 2 and 100 characters"),
 
   handleValidationErrors,
 ];

@@ -1,6 +1,6 @@
 const express = require("express");
 const { db } = require("../config/firebase");
-const { checkAuth } = require("../middleware/auth");
+const { checkAuth, verifyToken } = require("../middleware/auth");
 const {
   generalLimiter,
   voteLimiter,
@@ -10,7 +10,6 @@ const { asyncHandler } = require("../middleware/errorHandler");
 const {
   paginationValidation,
   createCommentValidation,
-  voteValidation,
 } = require("../middleware/validation");
 
 const router = express.Router();
@@ -167,16 +166,22 @@ router.get(
   })
 );
 
-// Vote for work
+// Vote for work - REQUIRES AUTHENTICATION
 router.post(
   "/works/:id/vote",
   voteLimiter,
-  checkAuth,
-  voteValidation,
+  verifyToken, // Require authentication for voting
   asyncHandler(async (req, res) => {
     const workId = req.params.id;
-    const userId = req.user?.uid;
-    const userIP = req.ip;
+    const userId = req.user.uid;
+
+    // Only allow pengunjung to vote
+    if (req.user.role !== "pengunjung") {
+      return res.status(403).json({
+        success: false,
+        message: "Only registered visitors can vote",
+      });
+    }
 
     // Check if work exists and is approved
     const workDoc = await db.collection("works").doc(workId).get();
@@ -187,18 +192,14 @@ router.post(
       });
     }
 
-    // Check if user/IP has already voted
-    let voteQuery = db.collection("votes").where("workId", "==", workId);
+    // Check if user has already voted
+    const existingVoteQuery = await db
+      .collection("votes")
+      .where("workId", "==", workId)
+      .where("userId", "==", userId)
+      .get();
 
-    if (userId) {
-      voteQuery = voteQuery.where("userId", "==", userId);
-    } else {
-      voteQuery = voteQuery.where("userIP", "==", userIP);
-    }
-
-    const existingVote = await voteQuery.get();
-
-    if (!existingVote.empty) {
+    if (!existingVoteQuery.empty) {
       return res.status(400).json({
         success: false,
         message: "You have already voted for this work",
@@ -208,13 +209,10 @@ router.post(
     // Create vote record
     const voteData = {
       workId,
-      userIP,
+      userId,
+      userRole: req.user.role,
       createdAt: new Date(),
     };
-
-    if (userId) {
-      voteData.userId = userId;
-    }
 
     await db.collection("votes").add(voteData);
 
@@ -231,16 +229,16 @@ router.post(
   })
 );
 
-// Add comment
+// Add comment - REQUIRES AUTHENTICATION
 router.post(
   "/works/:id/comments",
   commentLimiter,
-  checkAuth,
+  verifyToken, // Require authentication for commenting
   createCommentValidation,
   asyncHandler(async (req, res) => {
     const workId = req.params.id;
     const { content } = req.body;
-    const userId = req.user?.uid;
+    const userId = req.user.uid;
 
     // Check if work exists and is approved
     const workDoc = await db.collection("works").doc(workId).get();
@@ -255,28 +253,20 @@ router.post(
     const commentData = {
       workId,
       content: content.trim(),
+      userId,
+      userRole: req.user.role,
       createdAt: new Date(),
     };
-
-    if (userId) {
-      commentData.userId = userId;
-    } else {
-      commentData.guestName = req.body.guestName || "Anonymous";
-    }
 
     const commentRef = await db.collection("comments").add(commentData);
     const newComment = { id: commentRef.id, ...commentData };
 
-    // Get user info if available
-    if (userId) {
-      const userDoc = await db.collection("users").doc(userId).get();
-      if (userDoc.exists) {
-        newComment.user = {
-          id: userDoc.id,
-          name: userDoc.data().name,
-        };
-      }
-    }
+    // Add user info
+    newComment.user = {
+      id: userId,
+      name: req.user.name,
+      role: req.user.role,
+    };
 
     res.status(201).json({
       success: true,
@@ -316,6 +306,7 @@ router.get(
           commentData.user = {
             id: userDoc.id,
             name: userData.name,
+            role: userData.role,
           };
         }
       }
@@ -362,6 +353,13 @@ router.get(
       .get();
     const totalStudents = studentsSnapshot.size;
 
+    // Get total pengunjung
+    const pengunjungSnapshot = await db
+      .collection("users")
+      .where("role", "==", "pengunjung")
+      .get();
+    const totalPengunjung = pengunjungSnapshot.size;
+
     // Get total votes
     const votesSnapshot = await db.collection("votes").get();
     const totalVotes = votesSnapshot.size;
@@ -376,9 +374,10 @@ router.get(
     res.json({
       success: true,
       data: {
-        totalWorks,
-        totalStudents,
-        totalVotes,
+        totalKarya: totalWorks,
+        totalMahasiswa: totalStudents,
+        totalPengunjung: totalPengunjung,
+        totalVote: totalVotes,
         categories,
       },
     });

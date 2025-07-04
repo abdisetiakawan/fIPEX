@@ -20,7 +20,19 @@
             <label class="block text-sm font-medium text-gray-700 mb-2">
               Daftar sebagai
             </label>
-            <div class="grid grid-cols-2 gap-3">
+            <div class="grid grid-cols-3 gap-3">
+              <button
+                type="button"
+                @click="form.role = 'pengunjung'"
+                :class="[
+                  'px-4 py-2 border rounded-md text-sm font-medium transition-colors',
+                  form.role === 'pengunjung'
+                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                ]"
+              >
+                Pengunjung
+              </button>
               <button
                 type="button"
                 @click="form.role = 'mahasiswa'"
@@ -81,6 +93,41 @@
               placeholder="Masukkan email"
             />
             <p v-if="errors.email" class="mt-1 text-sm text-red-600">{{ errors.email }}</p>
+          </div>
+
+          <!-- Pengunjung specific fields -->
+          <div v-if="form.role === 'pengunjung'" class="space-y-4">
+            <!-- Phone -->
+            <div>
+              <label for="phone" class="block text-sm font-medium text-gray-700">
+                No. Telepon (Opsional)
+              </label>
+              <input
+                id="phone"
+                v-model="form.phone"
+                type="tel"
+                class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                :class="{ 'border-red-500': errors.phone }"
+                placeholder="Masukkan nomor telepon"
+              />
+              <p v-if="errors.phone" class="mt-1 text-sm text-red-600">{{ errors.phone }}</p>
+            </div>
+
+            <!-- Institution -->
+            <div>
+              <label for="institution" class="block text-sm font-medium text-gray-700">
+                Asal Institusi (Opsional)
+              </label>
+              <input
+                id="institution"
+                v-model="form.institution"
+                type="text"
+                class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                :class="{ 'border-red-500': errors.institution }"
+                placeholder="Universitas, Perusahaan, dll."
+              />
+              <p v-if="errors.institution" class="mt-1 text-sm text-red-600">{{ errors.institution }}</p>
+            </div>
           </div>
 
           <!-- Mahasiswa specific fields -->
@@ -355,10 +402,14 @@ const form = reactive({
   email: '',
   password: '',
   confirmPassword: '',
-  role: 'mahasiswa',
+  role: 'pengunjung',
+  // Mahasiswa fields
   nim: '',
   program: '',
   angkatan: '',
+  // Pengunjung fields
+  phone: '',
+  institution: '',
   termsAccepted: false,
 })
 
@@ -371,6 +422,8 @@ const errors = reactive({
   nim: '',
   program: '',
   angkatan: '',
+  phone: '',
+  institution: '',
   termsAccepted: '',
 })
 
@@ -381,7 +434,7 @@ watch(() => form.password, () => { errors.password = '' })
 watch(() => form.confirmPassword, () => { errors.confirmPassword = '' })
 watch(() => form.role, () => { 
   errors.role = ''
-  // Clear mahasiswa-specific fields when role changes
+  // Clear role-specific fields when role changes
   if (form.role !== 'mahasiswa') {
     form.nim = ''
     form.program = ''
@@ -390,10 +443,18 @@ watch(() => form.role, () => {
     errors.program = ''
     errors.angkatan = ''
   }
+  if (form.role !== 'pengunjung') {
+    form.phone = ''
+    form.institution = ''
+    errors.phone = ''
+    errors.institution = ''
+  }
 })
 watch(() => form.nim, () => { errors.nim = '' })
 watch(() => form.program, () => { errors.program = '' })
 watch(() => form.angkatan, () => { errors.angkatan = '' })
+watch(() => form.phone, () => { errors.phone = '' })
+watch(() => form.institution, () => { errors.institution = '' })
 watch(() => form.termsAccepted, () => { errors.termsAccepted = '' })
 
 const validateForm = () => {
@@ -470,6 +531,14 @@ const validateForm = () => {
     }
   }
 
+  // Pengunjung-specific validation
+  if (form.role === 'pengunjung') {
+    if (form.phone && !/^(\+62|62|0)[0-9]{9,13}$/.test(form.phone.replace(/\s/g, ''))) {
+      errors.phone = 'Format nomor telepon tidak valid'
+      isValid = false
+    }
+  }
+
   // Terms validation
   if (!form.termsAccepted) {
     errors.termsAccepted = 'Anda harus menyetujui syarat dan ketentuan'
@@ -496,11 +565,14 @@ const handleRegister = async () => {
       termsAccepted: form.termsAccepted,
     }
 
-    // Add mahasiswa-specific fields
+    // Add role-specific fields
     if (form.role === 'mahasiswa') {
       registerData.nim = form.nim.trim()
       registerData.program = form.program.trim()
       registerData.angkatan = form.angkatan.trim()
+    } else if (form.role === 'pengunjung') {
+      if (form.phone) registerData.phone = form.phone.trim()
+      if (form.institution) registerData.institution = form.institution.trim()
     }
 
     const result = await authStore.register(registerData)

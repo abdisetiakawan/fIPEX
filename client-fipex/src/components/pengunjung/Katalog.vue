@@ -10,7 +10,15 @@
           <nav class="flex space-x-8">
             <router-link to="/pengunjung" class="text-gray-500 hover:text-gray-700">Beranda</router-link>
             <router-link to="/pengunjung/katalog" class="text-blue-600 font-medium">Katalog</router-link>
-            <router-link to="/pengunjung/favorit" class="text-gray-500 hover:text-gray-700">Favorit</router-link>
+            <router-link v-if="authStore.isAuthenticated()" to="/pengunjung/favorit" class="text-gray-500 hover:text-gray-700">Favorit</router-link>
+            <div v-if="authStore.isAuthenticated()" class="flex items-center space-x-4">
+              <span class="text-sm text-gray-600">Halo, {{ authStore.user?.name }}</span>
+              <button @click="logout" class="text-gray-500 hover:text-gray-700">Logout</button>
+            </div>
+            <div v-else class="flex space-x-4">
+              <router-link to="/login" class="text-gray-500 hover:text-gray-700">Login</router-link>
+              <router-link to="/register" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700">Daftar</router-link>
+            </div>
           </nav>
         </div>
       </div>
@@ -19,6 +27,22 @@
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div class="mb-8">
         <h1 class="text-3xl font-bold text-gray-900 mb-4">Katalog Karya</h1>
+        
+        <!-- Login reminder for voting -->
+        <div v-if="!authStore.isAuthenticated()" class="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <div class="flex items-center">
+            <svg class="w-5 h-5 text-yellow-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+            </svg>
+            <div>
+              <p class="text-yellow-800 font-medium">Ingin memberikan vote?</p>
+              <p class="text-yellow-700 text-sm">
+                <router-link to="/register" class="underline">Daftar</router-link> atau 
+                <router-link to="/login" class="underline">login</router-link> untuk dapat memberikan vote pada karya favorit Anda.
+              </p>
+            </div>
+          </div>
+        </div>
         
         <!-- Filters -->
         <div class="bg-white p-6 rounded-lg shadow-sm mb-6">
@@ -97,6 +121,7 @@
                     Lihat Detail
                   </button>
                   <button 
+                    v-if="authStore.isAuthenticated()"
                     @click="vote(work.id)"
                     :disabled="work.hasVoted"
                     :class="work.hasVoted ? 'bg-gray-400' : 'bg-green-600 hover:bg-green-700'"
@@ -104,6 +129,14 @@
                   >
                     {{ work.hasVoted ? 'Voted' : 'Vote' }}
                   </button>
+                  <router-link 
+                    v-else
+                    to="/login"
+                    class="px-3 py-1 bg-gray-400 text-white text-sm rounded"
+                    title="Login untuk vote"
+                  >
+                    Vote
+                  </router-link>
                 </div>
               </div>
             </div>
@@ -148,9 +181,11 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useAuthStore } from '../../stores/auth'
 
 const router = useRouter()
 const route = useRoute()
+const authStore = useAuthStore()
 
 const filters = ref({
   search: route.query.search || '',
@@ -271,9 +306,15 @@ const viewDetail = (id) => {
 }
 
 const vote = async (id) => {
+  if (!authStore.isAuthenticated()) {
+    router.push('/login')
+    return
+  }
+
   try {
-    const response = await fetch(`http://localhost:3000/api/public/vote/${id}`, {
-      method: 'POST'
+    const response = await fetch(`http://localhost:3000/api/public/works/${id}/vote`, {
+      method: 'POST',
+      credentials: 'include'
     })
     
     if (response.ok) {
@@ -282,10 +323,19 @@ const vote = async (id) => {
         work.votes++
         work.hasVoted = true
       }
+    } else {
+      const error = await response.json()
+      alert(error.message || 'Gagal memberikan vote')
     }
   } catch (error) {
     console.error('Error voting:', error)
+    alert('Terjadi kesalahan saat memberikan vote')
   }
+}
+
+const logout = () => {
+  authStore.logout()
+  router.push('/pengunjung')
 }
 
 onMounted(() => {

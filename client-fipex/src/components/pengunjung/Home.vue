@@ -10,8 +10,15 @@
           <nav class="flex space-x-8">
             <router-link to="/pengunjung" class="text-blue-600 font-medium">Beranda</router-link>
             <router-link to="/pengunjung/katalog" class="text-gray-500 hover:text-gray-700">Katalog</router-link>
-            <router-link to="/pengunjung/favorit" class="text-gray-500 hover:text-gray-700">Favorit</router-link>
-            <button @click="goToLogin" class="text-gray-500 hover:text-gray-700">Login</button>
+            <router-link v-if="authStore.isAuthenticated()" to="/pengunjung/favorit" class="text-gray-500 hover:text-gray-700">Favorit</router-link>
+            <div v-if="authStore.isAuthenticated()" class="flex items-center space-x-4">
+              <span class="text-sm text-gray-600">Halo, {{ authStore.user?.name }}</span>
+              <button @click="logout" class="text-gray-500 hover:text-gray-700">Logout</button>
+            </div>
+            <div v-else class="flex space-x-4">
+              <router-link to="/login" class="text-gray-500 hover:text-gray-700">Login</router-link>
+              <router-link to="/register" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700">Daftar</router-link>
+            </div>
           </nav>
         </div>
       </div>
@@ -25,8 +32,21 @@
             Selamat Datang di Pameran Digital
           </h1>
           <p class="text-xl text-gray-600 mb-8">
-            Jelajahi karya-karya inovatif mahasiswa
+            Jelajahi karya-karya inovatif mahasiswa dan berikan vote untuk karya favorit Anda
           </p>
+          
+          <!-- Registration CTA for non-authenticated users -->
+          <div v-if="!authStore.isAuthenticated()" class="mb-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <p class="text-blue-800 mb-3">
+              <strong>Daftar sekarang</strong> untuk dapat memberikan vote pada karya-karya yang Anda sukai!
+            </p>
+            <router-link 
+              to="/register"
+              class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+            >
+              Daftar Gratis
+            </router-link>
+          </div>
           
           <!-- Search Bar -->
           <div class="max-w-md mx-auto">
@@ -66,8 +86,8 @@
             <div class="text-gray-600">Mahasiswa</div>
           </div>
           <div class="bg-white p-6 rounded-lg shadow text-center">
-            <div class="text-3xl font-bold text-orange-600">{{ stats.totalKategori }}</div>
-            <div class="text-gray-600">Kategori</div>
+            <div class="text-3xl font-bold text-orange-600">{{ stats.totalPengunjung }}</div>
+            <div class="text-gray-600">Pengunjung Terdaftar</div>
           </div>
         </div>
       </div>
@@ -123,15 +143,17 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '../../stores/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
 const searchQuery = ref('')
 const stats = ref({
   totalKarya: 156,
   totalVote: 2847,
   totalMahasiswa: 89,
-  totalKategori: 12
+  totalPengunjung: 245
 })
 
 const featuredWorks = ref([
@@ -169,8 +191,9 @@ const viewDetail = (id) => {
   router.push(`/pengunjung/detail/${id}`)
 }
 
-const goToLogin = () => {
-  router.push('/login')
+const logout = () => {
+  authStore.logout()
+  router.push('/pengunjung')
 }
 
 onMounted(async () => {

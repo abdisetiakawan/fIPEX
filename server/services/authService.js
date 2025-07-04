@@ -16,6 +16,8 @@ class AuthService {
       nim,
       program,
       angkatan,
+      phone,
+      institution,
       termsAccepted,
     } = userData;
 
@@ -56,7 +58,7 @@ class AuthService {
       lastLogin: null,
       profile: {
         bio: "",
-        phone: "",
+        phone: phone || "",
         linkedin: "",
         github: "",
         portfolio: "",
@@ -70,6 +72,8 @@ class AuthService {
       newUser.nim = nim;
       newUser.program = program;
       newUser.angkatan = angkatan;
+    } else if (role === "pengunjung") {
+      newUser.institution = institution || "";
     }
 
     // Save to Firestore
