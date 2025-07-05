@@ -15,6 +15,7 @@ const authRoutes = require("./routes/auth");
 const publicRoutes = require("./routes/public");
 const adminRoutes = require("./routes/admin");
 const worksRoutes = require("./routes/works");
+const panitiaRoutes = require("./routes/panitia");
 
 const app = express();
 
@@ -63,6 +64,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/public", publicRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/works", worksRoutes);
+app.use("/api/panitia", panitiaRoutes);
 
 // 404 handler
 app.use(notFoundHandler);
@@ -78,6 +80,7 @@ app.listen(PORT, () => {
   console.log(
     `📱 Client URL: ${process.env.CLIENT_URL || "http://localhost:5173"}`
   );
+  console.log(`📧 Email service: ${process.env.SMTP_HOST ? 'Configured' : 'Not configured'}`);
 });
 
 module.exports = app;
