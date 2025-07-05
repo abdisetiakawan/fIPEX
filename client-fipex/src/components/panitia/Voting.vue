@@ -21,10 +21,20 @@
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div class="flex justify-between items-center mb-8">
         <div>
-          <h1 class="text-3xl font-bold text-gray-900 mb-2">Voting Monitor</h1>
-          <p class="text-gray-600">Real-time monitoring voting dan analytics</p>
+          <h1 class="text-3xl font-bold text-gray-900 mb-2">Voting Analytics & Monitor</h1>
+          <p class="text-gray-600">Real-time monitoring voting dan analytics mendalam</p>
         </div>
         <div class="flex space-x-3">
+          <select 
+            v-model="selectedPeriod"
+            @change="loadVotingAnalytics"
+            class="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="24h">24 Jam Terakhir</option>
+            <option value="7d">7 Hari Terakhir</option>
+            <option value="30d">30 Hari Terakhir</option>
+            <option value="90d">90 Hari Terakhir</option>
+          </select>
           <button 
             @click="refreshData"
             :disabled="loading"
@@ -33,7 +43,7 @@
             {{ loading ? 'Refreshing...' : '🔄 Refresh' }}
           </button>
           <button 
-            @click="exportData"
+            @click="exportVotingData"
             class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
           >
             📊 Export Data
@@ -45,48 +55,51 @@
       <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div class="bg-white p-6 rounded-lg shadow">
           <div class="flex items-center">
-            <div class="text-3xl font-bold text-blue-600 mb-2">{{ votingStats.totalVotes }}</div>
+            <div class="text-3xl font-bold text-blue-600 mb-2">{{ votingAnalytics.totalVotes || 0 }}</div>
             <div class="ml-2 text-green-500 text-sm">
-              +{{ votingStats.todayVotes }} hari ini
+              +{{ getTodayVotes() }} hari ini
             </div>
           </div>
-          <div class="text-gray-600">Total Votes</div>
+          <div class="text-gray-600">Total Votes ({{ selectedPeriod }})</div>
         </div>
+        
         <div class="bg-white p-6 rounded-lg shadow">
-          <div class="text-3xl font-bold text-purple-600 mb-2">{{ votingStats.activeVoters }}</div>
-          <div class="text-gray-600">Active Voters</div>
+          <div class="text-3xl font-bold text-purple-600 mb-2">{{ votingAnalytics.summary?.uniqueVoters || 0 }}</div>
+          <div class="text-gray-600">Unique Voters</div>
         </div>
+        
         <div class="bg-white p-6 rounded-lg shadow">
-          <div class="text-3xl font-bold text-orange-600 mb-2">{{ votingStats.avgVotesPerWork }}</div>
-          <div class="text-gray-600">Avg Votes/Karya</div>
+          <div class="text-3xl font-bold text-orange-600 mb-2">{{ votingAnalytics.summary?.uniqueWorks || 0 }}</div>
+          <div class="text-gray-600">Works Voted</div>
         </div>
+        
         <div class="bg-white p-6 rounded-lg shadow">
-          <div class="text-3xl font-bold text-red-600 mb-2">{{ votingStats.participationRate }}%</div>
-          <div class="text-gray-600">Participation Rate</div>
+          <div class="text-3xl font-bold text-red-600 mb-2">{{ votingAnalytics.summary?.averageVotesPerDay || 0 }}</div>
+          <div class="text-gray-600">Avg Votes/Day</div>
         </div>
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <!-- Top Voted Works -->
+        <!-- Top Voted Works in Period -->
         <div class="lg:col-span-2">
           <div class="bg-white rounded-lg shadow">
             <div class="p-6 border-b">
               <div class="flex justify-between items-center">
-                <h2 class="text-lg font-semibold">Top 10 Karya Terpopuler</h2>
+                <h2 class="text-lg font-semibold">Top Voted Works ({{ selectedPeriod }})</h2>
                 <div class="flex space-x-2">
                   <button 
-                    @click="sortBy = 'votes'"
-                    :class="sortBy === 'votes' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'"
+                    @click="sortBy = 'periodVotes'"
+                    :class="sortBy === 'periodVotes' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'"
                     class="px-3 py-1 text-sm rounded"
                   >
-                    By Votes
+                    Period Votes
                   </button>
                   <button 
-                    @click="sortBy = 'growth'"
-                    :class="sortBy === 'growth' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'"
+                    @click="sortBy = 'totalVotes'"
+                    :class="sortBy === 'totalVotes' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'"
                     class="px-3 py-1 text-sm rounded"
                   >
-                    By Growth
+                    Total Votes
                   </button>
                 </div>
               </div>
@@ -94,7 +107,7 @@
             <div class="p-6">
               <div class="space-y-4">
                 <div 
-                  v-for="(work, index) in topWorks" 
+                  v-for="(work, index) in sortedTopWorks" 
                   :key="work.id"
                   class="flex items-center space-x-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50"
                 >
@@ -108,43 +121,107 @@
                     </div>
                   </div>
                   
-                  <!-- Thumbnail -->
-                  <div class="w-16 h-16 bg-gray-200 rounded-lg flex-shrink-0"></div>
-                  
                   <!-- Content -->
                   <div class="flex-1">
                     <h3 class="font-medium text-gray-900">{{ work.title }}</h3>
                     <p class="text-sm text-gray-600">{{ work.author }}</p>
                     <div class="flex items-center space-x-4 mt-1">
-                      <span class="text-sm text-blue-600 font-medium">{{ work.votes }} votes</span>
-                      <span class="text-sm text-gray-500">{{ work.views }} views</span>
-                      <span 
-                        v-if="work.growth > 0"
-                        class="text-sm text-green-600"
-                      >
-                        +{{ work.growth }}% today
+                      <span class="text-sm text-blue-600 font-medium">
+                        +{{ work.periodVotes }} votes ({{ selectedPeriod }})
                       </span>
+                      <span class="text-sm text-gray-500">{{ work.totalVotes }} total</span>
+                      <span class="text-sm text-purple-600">{{ work.category }}</span>
                     </div>
                   </div>
                   
                   <!-- Vote Progress -->
                   <div class="flex-shrink-0 w-24">
-                    <div class="text-xs text-gray-500 mb-1">{{ Math.round((work.votes / votingStats.totalVotes) * 100) }}%</div>
+                    <div class="text-xs text-gray-500 mb-1">
+                      {{ Math.round((work.periodVotes / (votingAnalytics.totalVotes || 1)) * 100) }}%
+                    </div>
                     <div class="w-full bg-gray-200 rounded-full h-2">
                       <div 
                         class="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                        :style="{ width: `${(work.votes / topWorks[0].votes) * 100}%` }"
+                        :style="{ width: `${getVotePercentage(work.periodVotes)}%` }"
                       ></div>
                     </div>
                   </div>
                 </div>
               </div>
+              
+              <div v-if="!votingAnalytics.topVotedWorks?.length" class="text-center py-8 text-gray-500">
+                Tidak ada data voting untuk periode ini
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Live Activity & Analytics -->
+        <!-- Analytics & Top Voters -->
         <div class="space-y-6">
+          <!-- Voting Trends Chart -->
+          <div class="bg-white rounded-lg shadow">
+            <div class="p-6 border-b">
+              <h3 class="font-semibold">Voting Trends ({{ selectedPeriod }})</h3>
+            </div>
+            <div class="p-6">
+              <div class="space-y-3">
+                <div 
+                  v-for="(votes, date) in sortedVotingTrends" 
+                  :key="date"
+                  class="flex items-center justify-between"
+                >
+                  <div class="text-sm text-gray-600">{{ formatDate(date) }}</div>
+                  <div class="flex items-center space-x-2">
+                    <div class="w-20 bg-gray-200 rounded-full h-2">
+                      <div 
+                        class="bg-blue-600 h-2 rounded-full"
+                        :style="{ width: `${getTrendPercentage(votes)}%` }"
+                      ></div>
+                    </div>
+                    <div class="text-sm font-medium w-8">{{ votes }}</div>
+                  </div>
+                </div>
+              </div>
+              
+              <div v-if="!Object.keys(votingAnalytics.votingTrends || {}).length" class="text-center py-4 text-gray-500">
+                Tidak ada data trend
+              </div>
+            </div>
+          </div>
+
+          <!-- Top Voters -->
+          <div class="bg-white rounded-lg shadow">
+            <div class="p-6 border-b">
+              <h3 class="font-semibold">Most Active Voters ({{ selectedPeriod }})</h3>
+            </div>
+            <div class="p-6">
+              <div class="space-y-3">
+                <div 
+                  v-for="(voter, index) in votingAnalytics.topVoters?.slice(0, 10)" 
+                  :key="voter.id"
+                  class="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                >
+                  <div class="flex items-center space-x-3">
+                    <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                      {{ index + 1 }}
+                    </div>
+                    <div>
+                      <div class="text-sm font-medium">{{ voter.name }}</div>
+                      <div class="text-xs text-gray-500">{{ voter.institution || voter.role }}</div>
+                    </div>
+                  </div>
+                  <div class="text-sm font-medium text-blue-600">
+                    {{ voter.periodVotes }} votes
+                  </div>
+                </div>
+              </div>
+              
+              <div v-if="!votingAnalytics.topVoters?.length" class="text-center py-4 text-gray-500">
+                Tidak ada data voter
+              </div>
+            </div>
+          </div>
+
           <!-- Live Activity Feed -->
           <div class="bg-white rounded-lg shadow">
             <div class="p-6 border-b">
@@ -170,55 +247,6 @@
             </div>
           </div>
 
-          <!-- Voting Trends Chart -->
-          <div class="bg-white rounded-lg shadow">
-            <div class="p-6 border-b">
-              <h3 class="font-semibold">Voting Trends (7 Hari)</h3>
-            </div>
-            <div class="p-6">
-              <div class="space-y-3">
-                <div 
-                  v-for="(day, index) in votingTrends" 
-                  :key="index"
-                  class="flex items-center justify-between"
-                >
-                  <div class="text-sm text-gray-600">{{ day.date }}</div>
-                  <div class="flex items-center space-x-2">
-                    <div class="w-20 bg-gray-200 rounded-full h-2">
-                      <div 
-                        class="bg-blue-600 h-2 rounded-full"
-                        :style="{ width: `${(day.votes / Math.max(...votingTrends.map(d => d.votes))) * 100}%` }"
-                      ></div>
-                    </div>
-                    <div class="text-sm font-medium w-8">{{ day.votes }}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Category Performance -->
-          <div class="bg-white rounded-lg shadow">
-            <div class="p-6 border-b">
-              <h3 class="font-semibold">Performance by Category</h3>
-            </div>
-            <div class="p-6">
-              <div class="space-y-3">
-                <div 
-                  v-for="category in categoryStats" 
-                  :key="category.name"
-                  class="flex items-center justify-between"
-                >
-                  <div class="text-sm text-gray-700">{{ category.name }}</div>
-                  <div class="flex items-center space-x-2">
-                    <div class="text-sm font-medium">{{ category.avgVotes }}</div>
-                    <div class="text-xs text-gray-500">avg</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
           <!-- Quick Actions -->
           <div class="bg-white rounded-lg shadow">
             <div class="p-6 border-b">
@@ -226,22 +254,22 @@
             </div>
             <div class="p-6 space-y-3">
               <button 
-                @click="resetVoting"
-                class="w-full px-4 py-2 bg-red-600 text-white text-sm rounded hover:bg-red-700"
+                @click="downloadDetailedReport"
+                class="w-full px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
               >
-                🔄 Reset All Voting
+                📋 Download Detailed Report
               </button>
               <button 
-                @click="pauseVoting"
-                class="w-full px-4 py-2 bg-yellow-600 text-white text-sm rounded hover:bg-yellow-700"
-              >
-                ⏸️ Pause Voting
-              </button>
-              <button 
-                @click="announceWinner"
+                @click="exportVoterList"
                 class="w-full px-4 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700"
               >
-                🏆 Announce Winner
+                👥 Export Voter List
+              </button>
+              <button 
+                @click="viewWorkAnalytics"
+                class="w-full px-4 py-2 bg-purple-600 text-white text-sm rounded hover:bg-purple-700"
+              >
+                📊 Work Analytics
               </button>
             </div>
           </div>
@@ -260,106 +288,31 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 const loading = ref(false)
-const sortBy = ref('votes')
+const selectedPeriod = ref('7d')
+const sortBy = ref('periodVotes')
 
-const votingStats = ref({
-  totalVotes: 2847,
-  todayVotes: 156,
-  activeVoters: 89,
-  avgVotesPerWork: 23,
-  participationRate: 67
-})
-
-const topWorks = ref([
-  {
-    id: 1,
-    title: 'EcoTracker - Green Living App',
-    author: 'Sarah Chen',
-    votes: 127,
-    views: 1234,
-    growth: 15
-  },
-  {
-    id: 2,
-    title: 'Smart IoT Dashboard',
-    author: 'John Doe',
-    votes: 89,
-    views: 567,
-    growth: 8
-  },
-  {
-    id: 3,
-    title: 'UI/UX Portfolio Website',
-    author: 'Jane Smith',
-    votes: 76,
-    views: 890,
-    growth: 12
-  },
-  {
-    id: 4,
-    title: 'FinTech Mobile App',
-    author: 'Mike Johnson',
-    votes: 65,
-    views: 432,
-    growth: 5
-  },
-  {
-    id: 5,
-    title: 'E-Commerce Platform',
-    author: 'Lisa Wong',
-    votes: 54,
-    views: 321,
-    growth: 3
-  }
-])
-
-const liveActivities = ref([
-  {
-    id: 1,
-    message: 'New vote for "EcoTracker App"',
-    timeAgo: '2 detik lalu'
-  },
-  {
-    id: 2,
-    message: 'New vote for "Smart IoT Dashboard"',
-    timeAgo: '15 detik lalu'
-  },
-  {
-    id: 3,
-    message: 'New comment on "UI/UX Portfolio"',
-    timeAgo: '1 menit lalu'
-  },
-  {
-    id: 4,
-    message: 'New vote for "FinTech Mobile App"',
-    timeAgo: '2 menit lalu'
-  },
-  {
-    id: 5,
-    message: 'New vote for "EcoTracker App"',
-    timeAgo: '3 menit lalu'
-  }
-])
-
-const votingTrends = ref([
-  { date: 'Sen', votes: 45 },
-  { date: 'Sel', votes: 67 },
-  { date: 'Rab', votes: 89 },
-  { date: 'Kam', votes: 123 },
-  { date: 'Jum', votes: 156 },
-  { date: 'Sab', votes: 134 },
-  { date: 'Min', votes: 98 }
-])
-
-const categoryStats = ref([
-  { name: 'Aplikasi Mobile', avgVotes: 45 },
-  { name: 'Web Development', avgVotes: 38 },
-  { name: 'UI/UX Design', avgVotes: 32 },
-  { name: 'Business Plan', avgVotes: 28 },
-  { name: 'Data Science', avgVotes: 25 }
-])
+const votingAnalytics = ref({})
+const liveActivities = ref([])
 
 let refreshInterval = null
+
+const sortedTopWorks = computed(() => {
+  if (!votingAnalytics.value.topVotedWorks) return []
+  
+  const works = [...votingAnalytics.value.topVotedWorks]
+  if (sortBy.value === 'totalVotes') {
+    return works.sort((a, b) => b.totalVotes - a.totalVotes)
+  }
+  return works.sort((a, b) => b.periodVotes - a.periodVotes)
+})
+
+const sortedVotingTrends = computed(() => {
+  if (!votingAnalytics.value.votingTrends) return {}
+  
+  const trends = votingAnalytics.value.votingTrends
+  const sortedEntries = Object.entries(trends).sort(([a], [b]) => new Date(a) - new Date(b))
+  return Object.fromEntries(sortedEntries)
+})
 
 const getRankingColor = (index) => {
   if (index === 0) return 'bg-yellow-500' // Gold
@@ -368,11 +321,35 @@ const getRankingColor = (index) => {
   return 'bg-blue-600'
 }
 
-const refreshData = async () => {
+const getVotePercentage = (votes) => {
+  const maxVotes = Math.max(...(votingAnalytics.value.topVotedWorks?.map(w => w.periodVotes) || [1]))
+  return maxVotes > 0 ? (votes / maxVotes) * 100 : 0
+}
+
+const getTrendPercentage = (votes) => {
+  const maxVotes = Math.max(...Object.values(votingAnalytics.value.votingTrends || {}))
+  return maxVotes > 0 ? (votes / maxVotes) * 100 : 0
+}
+
+const getTodayVotes = () => {
+  const today = new Date().toISOString().split('T')[0]
+  return votingAnalytics.value.votingTrends?.[today] || 0
+}
+
+const formatDate = (dateString) => {
+  const date = new Date(dateString)
+  return date.toLocaleDateString('id-ID', { 
+    month: 'short', 
+    day: 'numeric',
+    weekday: 'short'
+  })
+}
+
+const loadVotingAnalytics = async () => {
   loading.value = true
   
   try {
-    const response = await fetch('http://localhost:3000/api/panitia/voting-stats', {
+    const response = await fetch(`http://localhost:3000/api/admin/voting-analytics?period=${selectedPeriod.value}`, {
       credentials: "include",
       headers: {
         'Authorization': `Bearer ${authStore.token}`
@@ -380,75 +357,26 @@ const refreshData = async () => {
     })
     
     if (response.ok) {
-      const data = await response.json()
-      // Update stats with real data
-      topWorks.value = data.topWorks || topWorks.value
-      votingStats.value = { ...votingStats.value, ...data }
+      const result = await response.json()
+      votingAnalytics.value = result.data
     }
   } catch (error) {
-    console.error('Error refreshing data:', error)
+    console.error('Error loading voting analytics:', error)
   }
   
   loading.value = false
 }
 
-const exportData = () => {
-  // Export voting data to CSV
-  const csvData = topWorks.value.map(work => ({
-    Ranking: topWorks.value.indexOf(work) + 1,
-    Title: work.title,
-    Author: work.author,
-    Votes: work.votes,
-    Views: work.views,
-    Growth: work.growth + '%'
-  }))
-  
-  const csv = [
-    Object.keys(csvData[0]).join(','),
-    ...csvData.map(row => Object.values(row).join(','))
-  ].join('\n')
-  
-  const blob = new Blob([csv], { type: 'text/csv' })
-  const url = window.URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'voting-data.csv'
-  a.click()
-  window.URL.revokeObjectURL(url)
+const refreshData = async () => {
+  await loadVotingAnalytics()
+  updateLiveActivities()
 }
 
-const resetVoting = () => {
-  if (confirm('Yakin ingin reset semua voting? Tindakan ini tidak dapat dibatalkan.')) {
-    // Reset voting logic
-    alert('Voting berhasil direset')
-  }
-}
-
-const pauseVoting = () => {
-  if (confirm('Yakin ingin pause voting sementara?')) {
-    // Pause voting logic
-    alert('Voting telah dipause')
-  }
-}
-
-const announceWinner = () => {
-  if (confirm('Yakin ingin mengumumkan pemenang berdasarkan voting saat ini?')) {
-    // Announce winner logic
-    alert('Pemenang telah diumumkan!')
-  }
-}
-
-const logout = () => {
-  authStore.logout()
-  router.push('/login')
-}
-
-// Simulate live updates
-const simulateLiveUpdate = () => {
-  // Add new activity
+const updateLiveActivities = () => {
+  // Simulate live activities from recent votes
   const activities = [
     'New vote for "EcoTracker App"',
-    'New vote for "Smart IoT Dashboard"',
+    'New vote for "Smart IoT Dashboard"', 
     'New comment on "UI/UX Portfolio"',
     'New vote for "FinTech Mobile App"',
     'New favorite added'
@@ -476,12 +404,103 @@ const simulateLiveUpdate = () => {
   })
 }
 
-onMounted(() => {
-  refreshData()
+const exportVotingData = () => {
+  try {
+    const data = {
+      period: selectedPeriod.value,
+      analytics: votingAnalytics.value,
+      exportedAt: new Date().toISOString(),
+    }
+    
+    const csv = [
+      ['Work Title', 'Author', 'Category', 'Period Votes', 'Total Votes', 'Status'].join(','),
+      ...(votingAnalytics.value.topVotedWorks || []).map(work => [
+        `"${work.title}"`,
+        `"${work.author}"`,
+        `"${work.category}"`,
+        work.periodVotes,
+        work.totalVotes,
+        work.status
+      ].join(','))
+    ].join('\n')
+    
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `voting-analytics-${selectedPeriod.value}-${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    window.URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error('Error exporting data:', error)
+    alert('Gagal export data')
+  }
+}
+
+const downloadDetailedReport = () => {
+  try {
+    const report = {
+      period: selectedPeriod.value,
+      summary: votingAnalytics.value.summary,
+      topWorks: votingAnalytics.value.topVotedWorks,
+      topVoters: votingAnalytics.value.topVoters,
+      trends: votingAnalytics.value.votingTrends,
+      generatedAt: new Date().toISOString(),
+    }
+    
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `detailed-voting-report-${selectedPeriod.value}-${new Date().toISOString().split('T')[0]}.json`
+    a.click()
+    window.URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error('Error downloading report:', error)
+    alert('Gagal download report')
+  }
+}
+
+const exportVoterList = () => {
+  try {
+    const csv = [
+      ['Rank', 'Name', 'Institution/Role', 'Votes in Period'].join(','),
+      ...(votingAnalytics.value.topVoters || []).map((voter, index) => [
+        index + 1,
+        `"${voter.name}"`,
+        `"${voter.institution || voter.role}"`,
+        voter.periodVotes
+      ].join(','))
+    ].join('\n')
+    
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `top-voters-${selectedPeriod.value}-${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    window.URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error('Error exporting voter list:', error)
+    alert('Gagal export voter list')
+  }
+}
+
+const viewWorkAnalytics = () => {
+  router.push('/panitia/management?tab=analytics')
+}
+
+const logout = () => {
+  authStore.logout()
+  router.push('/login')
+}
+
+onMounted(async () => {
+  await loadVotingAnalytics()
   
   // Set up real-time updates
   refreshInterval = setInterval(() => {
-    simulateLiveUpdate()
+    updateLiveActivities()
   }, 5000) // Update every 5 seconds
 })
 
