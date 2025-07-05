@@ -166,7 +166,7 @@ router.get(
   })
 );
 
-// Vote for work - REQUIRES AUTHENTICATION
+// Vote for work - REQUIRES AUTHENTICATION AND PENGUNJUNG ROLE
 router.post(
   "/works/:id/vote",
   voteLimiter,
@@ -179,7 +179,8 @@ router.post(
     if (req.user.role !== "pengunjung") {
       return res.status(403).json({
         success: false,
-        message: "Only registered visitors can vote",
+        message: "Only registered visitors (pengunjung) can vote",
+        code: "ROLE_NOT_ALLOWED"
       });
     }
 
@@ -188,7 +189,7 @@ router.post(
     if (!workDoc.exists || workDoc.data().status !== "approved") {
       return res.status(404).json({
         success: false,
-        message: "Work not found",
+        message: "Work not found or not approved",
       });
     }
 
@@ -203,6 +204,7 @@ router.post(
       return res.status(400).json({
         success: false,
         message: "You have already voted for this work",
+        code: "ALREADY_VOTED"
       });
     }
 
@@ -211,6 +213,7 @@ router.post(
       workId,
       userId,
       userRole: req.user.role,
+      userName: req.user.name,
       createdAt: new Date(),
     };
 
@@ -225,11 +228,80 @@ router.post(
     res.json({
       success: true,
       message: "Vote recorded successfully",
+      data: {
+        workId,
+        votes: (workData.votes || 0) + 1
+      }
     });
   })
 );
 
-// Add comment - REQUIRES AUTHENTICATION
+// Check user vote status for a work
+router.get(
+  "/works/:id/vote-status",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    const workId = req.params.id;
+    const userId = req.user.uid;
+
+    // Only check for pengunjung
+    if (req.user.role !== "pengunjung") {
+      return res.json({
+        success: true,
+        data: { hasVoted: false }
+      });
+    }
+
+    // Check if user has voted
+    const voteQuery = await db
+      .collection("votes")
+      .where("workId", "==", workId)
+      .where("userId", "==", userId)
+      .get();
+
+    res.json({
+      success: true,
+      data: {
+        hasVoted: !voteQuery.empty
+      }
+    });
+  })
+);
+
+// Get user's votes (for checking voted works)
+router.get(
+  "/user-votes",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    const userId = req.user.uid;
+
+    // Only for pengunjung
+    if (req.user.role !== "pengunjung") {
+      return res.json({
+        success: true,
+        data: { votes: [] }
+      });
+    }
+
+    // Get all user votes
+    const votesQuery = await db
+      .collection("votes")
+      .where("userId", "==", userId)
+      .get();
+
+    const votes = [];
+    votesQuery.forEach(doc => {
+      votes.push(doc.data().workId);
+    });
+
+    res.json({
+      success: true,
+      data: { votes }
+    });
+  })
+);
+
+// Add comment - REQUIRES AUTHENTICATION AND PENGUNJUNG ROLE
 router.post(
   "/works/:id/comments",
   commentLimiter,
@@ -240,12 +312,21 @@ router.post(
     const { content } = req.body;
     const userId = req.user.uid;
 
+    // Only allow pengunjung to comment
+    if (req.user.role !== "pengunjung") {
+      return res.status(403).json({
+        success: false,
+        message: "Only registered visitors (pengunjung) can comment",
+        code: "ROLE_NOT_ALLOWED"
+      });
+    }
+
     // Check if work exists and is approved
     const workDoc = await db.collection("works").doc(workId).get();
     if (!workDoc.exists || workDoc.data().status !== "approved") {
       return res.status(404).json({
         success: false,
-        message: "Work not found",
+        message: "Work not found or not approved",
       });
     }
 
@@ -255,6 +336,7 @@ router.post(
       content: content.trim(),
       userId,
       userRole: req.user.role,
+      userName: req.user.name,
       createdAt: new Date(),
     };
 
@@ -327,6 +409,151 @@ router.get(
           currentPage: Number.parseInt(page),
           totalPages: Math.ceil(comments.length / limit),
           totalItems: comments.length,
+          itemsPerPage: Number.parseInt(limit),
+        },
+      },
+    });
+  })
+);
+
+// Add/Remove favorite - REQUIRES AUTHENTICATION AND PENGUNJUNG ROLE
+router.post(
+  "/works/:id/favorite",
+  generalLimiter,
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    const workId = req.params.id;
+    const userId = req.user.uid;
+
+    // Only allow pengunjung to favorite
+    if (req.user.role !== "pengunjung") {
+      return res.status(403).json({
+        success: false,
+        message: "Only registered visitors (pengunjung) can favorite works",
+        code: "ROLE_NOT_ALLOWED"
+      });
+    }
+
+    // Check if work exists and is approved
+    const workDoc = await db.collection("works").doc(workId).get();
+    if (!workDoc.exists || workDoc.data().status !== "approved") {
+      return res.status(404).json({
+        success: false,
+        message: "Work not found or not approved",
+      });
+    }
+
+    // Check if already favorited
+    const existingFavoriteQuery = await db
+      .collection("favorites")
+      .where("workId", "==", workId)
+      .where("userId", "==", userId)
+      .get();
+
+    if (!existingFavoriteQuery.empty) {
+      // Remove favorite
+      await existingFavoriteQuery.docs[0].ref.delete();
+      
+      res.json({
+        success: true,
+        message: "Removed from favorites",
+        data: { isFavorite: false }
+      });
+    } else {
+      // Add favorite
+      await db.collection("favorites").add({
+        workId,
+        userId,
+        userRole: req.user.role,
+        userName: req.user.name,
+        createdAt: new Date(),
+      });
+
+      res.json({
+        success: true,
+        message: "Added to favorites",
+        data: { isFavorite: true }
+      });
+    }
+  })
+);
+
+// Get user's favorites
+router.get(
+  "/favorites",
+  verifyToken,
+  paginationValidation,
+  asyncHandler(async (req, res) => {
+    const userId = req.user.uid;
+    const { page = 1, limit = 12 } = req.query;
+
+    // Only for pengunjung
+    if (req.user.role !== "pengunjung") {
+      return res.json({
+        success: true,
+        data: {
+          works: [],
+          pagination: {
+            currentPage: 1,
+            totalPages: 0,
+            totalItems: 0,
+            itemsPerPage: Number.parseInt(limit),
+          },
+        },
+      });
+    }
+
+    // Get user's favorites
+    const favoritesQuery = await db
+      .collection("favorites")
+      .where("userId", "==", userId)
+      .orderBy("createdAt", "desc")
+      .get();
+
+    const works = [];
+    for (const favoriteDoc of favoritesQuery.docs) {
+      const favoriteData = favoriteDoc.data();
+      
+      // Get work details
+      const workDoc = await db.collection("works").doc(favoriteData.workId).get();
+      if (workDoc.exists && workDoc.data().status === "approved") {
+        const workData = { id: workDoc.id, ...workDoc.data() };
+        
+        // Get author info
+        if (workData.authorId) {
+          const authorDoc = await db
+            .collection("users")
+            .doc(workData.authorId)
+            .get();
+          if (authorDoc.exists) {
+            const authorData = authorDoc.data();
+            workData.author = {
+              id: authorDoc.id,
+              name: authorData.name,
+              program: authorData.program,
+              angkatan: authorData.angkatan,
+            };
+          }
+        }
+        
+        workData.addedToFavorites = favoriteData.createdAt;
+        works.push(workData);
+      }
+    }
+
+    // Apply pagination
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + Number.parseInt(limit);
+    const paginatedWorks = works.slice(startIndex, endIndex);
+
+    res.json({
+      success: true,
+      data: {
+        works: paginatedWorks,
+        pagination: {
+          currentPage: Number.parseInt(page),
+          totalPages: Math.ceil(works.length / limit),
+          totalItems: works.length,
           itemsPerPage: Number.parseInt(limit),
         },
       },

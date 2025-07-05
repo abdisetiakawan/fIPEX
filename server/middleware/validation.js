@@ -281,8 +281,6 @@ const updateWorkValidation = [
 
 // Comment validation rules
 const createCommentValidation = [
-  param("workId").isMongoId().withMessage("Invalid work ID"),
-
   body("content")
     .trim()
     .isLength({ min: 1, max: 500 })
@@ -293,15 +291,11 @@ const createCommentValidation = [
 
 // Vote validation rules
 const voteValidation = [
-  param("workId").isMongoId().withMessage("Invalid work ID"),
-
   handleValidationErrors,
 ];
 
 // Admin validation rules
 const updateUserStatusValidation = [
-  param("userId").isMongoId().withMessage("Invalid user ID"),
-
   body("status")
     .isIn(["active", "inactive", "banned"])
     .withMessage("Invalid status"),
@@ -310,8 +304,6 @@ const updateUserStatusValidation = [
 ];
 
 const approveWorkValidation = [
-  param("workId").isMongoId().withMessage("Invalid work ID"),
-
   body("status")
     .isIn(["approved", "rejected"])
     .withMessage("Invalid approval status"),
@@ -343,7 +335,7 @@ const paginationValidation = [
 
   query("category")
     .optional()
-    .isIn(["design", "programming", "multimedia", "other"])
+    .isIn(["Aplikasi Mobile", "Web Development", "UI/UX Design", "Business Plan", "Data Science"])
     .withMessage("Invalid category"),
 
   query("status")
