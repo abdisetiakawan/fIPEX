@@ -101,18 +101,37 @@ export const useAuthStore = defineStore("auth", () => {
 
   const checkAuth = async () => {
     try {
+      // Don't show loading for auth check to prevent UI flicker
       const response = await authAPI.me();
 
       if (response.data.success) {
-        user.value = response.data.data.user;
+        const userData = response.data.data.user;
+        
+        // Ensure user data is properly set
+        user.value = {
+          uid: userData.uid,
+          email: userData.email,
+          name: userData.name,
+          role: userData.role,
+          status: userData.status,
+          ...userData
+        };
+        
+        console.log('Auth check successful for user:', userData.name, 'Role:', userData.role);
         return true;
       } else {
+        console.log('Auth check failed:', response.data.message);
         user.value = null;
         return false;
       }
     } catch (error) {
       console.error("Auth check error:", error);
-      user.value = null;
+      
+      // Only clear user if it's a real auth error, not a network error
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        user.value = null;
+      }
+      
       return false;
     }
   };
@@ -184,6 +203,8 @@ export const useAuthStore = defineStore("auth", () => {
         return "/mahasiswa";
       case "panitia":
         return "/panitia";
+      case "pengunjung":
+        return "/pengunjung";
       default:
         return "/pengunjung";
     }
@@ -198,7 +219,7 @@ export const useAuthStore = defineStore("auth", () => {
   };
 
   const isAuthenticated = () => {
-    return !!user.value;
+    return !!user.value && !!user.value.uid;
   };
 
   return {

@@ -248,7 +248,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 
@@ -258,7 +258,7 @@ const authStore = useAuthStore()
 
 const filters = ref({
   search: route.query.search || '',
-  category: '',
+  category: route.query.category || '',
   sort: 'newest'
 })
 
@@ -419,6 +419,13 @@ const logout = () => {
   authStore.logout()
   router.push('/pengunjung')
 }
+
+// Watch for auth changes to update vote status
+watch(() => authStore.user, async () => {
+  if (authStore.isAuthenticated() && authStore.user?.role === 'pengunjung') {
+    await checkUserVotes()
+  }
+}, { deep: true })
 
 onMounted(() => {
   loadWorks()

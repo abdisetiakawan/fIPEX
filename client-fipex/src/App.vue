@@ -12,13 +12,14 @@ const authStore = useAuthStore()
 
 onMounted(async () => {
   // Check if user is already authenticated on app start
-  if (authStore.token) {
-    try {
-      await authStore.checkAuth()
-    } catch (error) {
-      console.error('Auth check failed:', error)
-      authStore.logout()
-    }
+  console.log('App mounted, checking authentication...')
+  
+  try {
+    await authStore.checkAuth()
+    console.log('Auth check completed. User:', authStore.user?.name, 'Role:', authStore.user?.role)
+  } catch (error) {
+    console.error('Auth check failed:', error)
+    // Don't logout here, let the auth store handle it
   }
 })
 </script>

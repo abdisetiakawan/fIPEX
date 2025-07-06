@@ -51,8 +51,6 @@ apiClient.interceptors.response.use(
     return response;
   },
   async (error) => {
-    const authStore = useAuthStore();
-
     // Calculate request duration
     const duration = error.config?.metadata
       ? new Date() - error.config.metadata.startTime
@@ -79,11 +77,21 @@ apiClient.interceptors.response.use(
             data.code === "INVALID_TOKEN" ||
             data.code === "TOKEN_REQUIRED"
           ) {
-            authStore.logout();
+            console.log('Token expired/invalid, clearing auth state');
+            
+            // Get auth store instance
+            const authStore = useAuthStore();
+            
+            // Clear auth state
+            authStore.user = null;
 
-            // Only redirect to login if not already on login page
-            if (router.currentRoute.value.path !== "/login") {
-              authStore.setRedirectPath(router.currentRoute.value.fullPath);
+            // Only redirect to login if not already on login page or public pages
+            const currentPath = router.currentRoute.value.path;
+            const publicPaths = ['/login', '/register', '/pengunjung', '/pengunjung/katalog'];
+            const isPublicPath = publicPaths.some(path => currentPath.startsWith(path));
+            
+            if (!isPublicPath) {
+              authStore.setRedirectPath(currentPath);
               router.push("/login");
             }
           }
@@ -92,6 +100,10 @@ apiClient.interceptors.response.use(
         case 403:
           // Forbidden - insufficient permissions
           if (data.code === "INSUFFICIENT_PERMISSIONS") {
+            console.log('Insufficient permissions, redirecting to appropriate dashboard');
+            // Get auth store instance
+            const authStore = useAuthStore();
+            
             // Redirect to appropriate dashboard based on user role
             const userRole = authStore.user?.role;
             if (userRole === "mahasiswa") {

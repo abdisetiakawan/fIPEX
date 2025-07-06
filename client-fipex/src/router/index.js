@@ -30,7 +30,11 @@ const routes = [
   { path: "/pengunjung", component: Home },
   { path: "/pengunjung/katalog", component: Katalog },
   { path: "/pengunjung/detail/:id", component: Detail },
-  { path: "/pengunjung/favorit", component: Favorit },
+  { 
+    path: "/pengunjung/favorit", 
+    component: Favorit,
+    meta: { requiresAuth: true, roles: ["pengunjung"] }
+  },
   { path: "/login", component: Login },
   { path: "/register", component: Register },
 
@@ -101,19 +105,28 @@ const router = createRouter({
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore();
 
+  console.log('Navigation guard - Going to:', to.path, 'Requires auth:', to.meta.requiresAuth);
+
   // Check if route requires authentication
   if (to.meta.requiresAuth) {
+    console.log('Route requires auth, checking authentication...');
+    
     // Check if user is authenticated
     const isAuthenticated = await authStore.checkAuth();
+    console.log('Authentication check result:', isAuthenticated);
 
     if (!isAuthenticated) {
+      console.log('User not authenticated, redirecting to login');
       // Store the intended destination
       authStore.setRedirectPath(to.fullPath);
       return next("/login");
     }
 
+    console.log('User authenticated:', authStore.user?.name, 'Role:', authStore.user?.role);
+
     // Check role-based access
     if (to.meta.roles && !authStore.hasRole(to.meta.roles)) {
+      console.log('User does not have required role. Required:', to.meta.roles, 'User role:', authStore.user?.role);
       // Redirect to appropriate dashboard based on user role
       const userRole = authStore.user?.role;
       if (userRole === "mahasiswa") {
@@ -131,6 +144,7 @@ router.beforeEach(async (to, from, next) => {
     (to.path === "/login" || to.path === "/register") &&
     authStore.isAuthenticated()
   ) {
+    console.log('Authenticated user trying to access login/register, redirecting to dashboard');
     const userRole = authStore.user?.role;
     if (userRole === "mahasiswa") {
       return next("/mahasiswa");
@@ -141,6 +155,7 @@ router.beforeEach(async (to, from, next) => {
     }
   }
 
+  console.log('Navigation allowed, proceeding to:', to.path);
   next();
 });
 

@@ -48,6 +48,7 @@ const verifyToken = async (req, res, next) => {
       email: userData.email,
       name: userData.name,
       role: userData.role,
+      status: userData.status,
       ...userData,
     };
 
@@ -115,19 +116,25 @@ const checkAuth = async (req, res, next) => {
 
       if (userDoc.exists) {
         const userData = userDoc.data();
-        req.user = {
-          uid: userDoc.id,
-          email: userData.email,
-          name: userData.name,
-          role: userData.role,
-          ...userData,
-        };
+        
+        // Only set user if account is active
+        if (userData.status === "active") {
+          req.user = {
+            uid: userDoc.id,
+            email: userData.email,
+            name: userData.name,
+            role: userData.role,
+            status: userData.status,
+            ...userData,
+          };
+        }
       }
     }
 
     next();
   } catch (error) {
     // Continue without authentication for optional auth
+    console.log("Optional auth check failed:", error.message);
     next();
   }
 };
