@@ -566,7 +566,7 @@ router.get(
   "/stats",
   generalLimiter,
   asyncHandler(async (req, res) => {
-    // Get total works
+    // Get total approved works
     const worksSnapshot = await db
       .collection("works")
       .where("status", "==", "approved")
@@ -577,6 +577,7 @@ router.get(
     const studentsSnapshot = await db
       .collection("users")
       .where("role", "==", "mahasiswa")
+      .where("status", "==", "active")
       .get();
     const totalStudents = studentsSnapshot.size;
 
@@ -584,12 +585,17 @@ router.get(
     const pengunjungSnapshot = await db
       .collection("users")
       .where("role", "==", "pengunjung")
+      .where("status", "==", "active")
       .get();
     const totalPengunjung = pengunjungSnapshot.size;
 
     // Get total votes
     const votesSnapshot = await db.collection("votes").get();
     const totalVotes = votesSnapshot.size;
+
+    // Get total comments
+    const commentsSnapshot = await db.collection("comments").get();
+    const totalComments = commentsSnapshot.size;
 
     // Get categories count
     const categories = {};
@@ -605,6 +611,7 @@ router.get(
         totalMahasiswa: totalStudents,
         totalPengunjung: totalPengunjung,
         totalVote: totalVotes,
+        totalComments: totalComments,
         categories,
       },
     });

@@ -45,9 +45,9 @@
               <div class="text-sm text-blue-600 mb-2">{{ work.category }}</div>
               <h1 class="text-3xl font-bold text-gray-900 mb-2">{{ work.title }}</h1>
               <div class="flex items-center space-x-4 text-sm text-gray-500">
-                <span>{{ work.author }}</span>
-                <span v-if="work.program">{{ work.program }}</span>
-                <span v-if="work.angkatan">Angkatan {{ work.angkatan }}</span>
+                <span>{{ work.author?.name || work.author }}</span>
+                <span v-if="work.author?.program">{{ work.author.program }}</span>
+                <span v-if="work.author?.angkatan">Angkatan {{ work.author.angkatan }}</span>
               </div>
             </div>
             <div class="text-center">
@@ -380,7 +380,11 @@ const toggleFavorite = async () => {
     })
     
     if (response.ok) {
-      work.value.isFavorite = !work.value.isFavorite
+      const result = await response.json()
+      work.value.isFavorite = result.data.isFavorite
+      
+      const message = result.data.isFavorite ? 'Ditambahkan ke favorit!' : 'Dihapus dari favorit!'
+      alert(message)
     }
   } catch (error) {
     console.error('Error toggling favorite:', error)
@@ -485,6 +489,27 @@ const checkUserVote = async () => {
   }
 }
 
+const checkUserFavorite = async () => {
+  if (!authStore.isAuthenticated() || authStore.user?.role !== 'pengunjung') {
+    return
+  }
+
+  try {
+    // Check if work is in user's favorites
+    const response = await fetch('http://localhost:3000/api/public/favorites', {
+      credentials: 'include'
+    })
+    
+    if (response.ok) {
+      const result = await response.json()
+      const favorites = result.data.works || []
+      work.value.isFavorite = favorites.some(fav => fav.id === workId)
+    }
+  } catch (error) {
+    console.error('Error checking favorite status:', error)
+  }
+}
+
 const logout = () => {
   authStore.logout()
   router.push('/pengunjung')
@@ -506,6 +531,9 @@ onMounted(async () => {
       
       // Check if user has voted
       await checkUserVote()
+      
+      // Check if work is favorited
+      await checkUserFavorite()
     } else {
       work.value = null
     }
