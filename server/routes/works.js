@@ -76,12 +76,25 @@ router.get(
     const worksSnapshot = await query.get();
     const works = [];
 
-    worksSnapshot.forEach((doc) => {
-      works.push({
-        id: doc.id,
-        ...doc.data(),
-      });
-    });
+    for (const doc of worksSnapshot.docs) {
+      const workData = { id: doc.id, ...doc.data() };
+      
+      // Get vote count for this work
+      const votesQuery = await db
+        .collection("votes")
+        .where("workId", "==", doc.id)
+        .get();
+      workData.votes = votesQuery.size;
+      
+      // Get comment count for this work
+      const commentsQuery = await db
+        .collection("comments")
+        .where("workId", "==", doc.id)
+        .get();
+      workData.commentCount = commentsQuery.size;
+      
+      works.push(workData);
+    }
 
     // Apply pagination
     const startIndex = (page - 1) * limit;
