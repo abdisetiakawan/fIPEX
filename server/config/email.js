@@ -307,6 +307,9 @@ function getUpdateSpecificContent(updateType, userRole) {
 // Send email function
 const sendEmail = async (to, template, data) => {
   try {
+    console.log('📧 Attempting to send email to:', to);
+    console.log('📧 Template subject:', template.subject);
+    
     const mailOptions = {
       from: `"Digital Exhibition" <${process.env.SMTP_USER}>`,
       to: Array.isArray(to) ? to.join(', ') : to,
@@ -314,6 +317,11 @@ const sendEmail = async (to, template, data) => {
       html: template.html
     };
 
+    console.log('📧 Mail options:', {
+      from: mailOptions.from,
+      to: mailOptions.to,
+      subject: mailOptions.subject
+    });
     const result = await transporter.sendMail(mailOptions);
     console.log('✅ Email sent successfully:', result.messageId);
     return { success: true, messageId: result.messageId };

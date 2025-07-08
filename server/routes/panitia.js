@@ -328,13 +328,20 @@ router.post('/sessions/:id/notify', generalLimiter, asyncHandler(async (req, res
   const sessionData = { id: sessionId, ...sessionDoc.data() };
 
   try {
+    // Debug users first
+    console.log('🔍 Debugging users before sending notifications...');
+    await emailService.debugUsers();
+    
     let results = [];
     
     for (const role of roles) {
+      console.log(`📧 Sending to role: ${role}`);
       const result = await emailService.sendToRole(sessionData, role, 'sessionNotification');
+      console.log(`📊 Result for ${role}:`, result);
       results.push({ role, ...result });
     }
 
+    console.log('📊 Final results:', results);
     res.json({
       success: true,
       message: 'Notifications sent successfully',
